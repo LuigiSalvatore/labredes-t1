@@ -24,7 +24,7 @@ class MessageHandler:
 
         elif cmd == "TALK" and len(parts) >= 3:
             msg_id = parts[1]
-            data = parts[2]
+            data = " ".join(parts[2:]) # Mensagem pode conter espaços / multiplas palavras
             print(f"[TALK recebido de {sender_ip}] {data}")
             udp_node.send_udp(f"ACK {msg_id}", sender_ip, sender_port)
 
