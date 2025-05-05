@@ -14,6 +14,7 @@ DEVICE_TIMEOUT = 10
 CLEANUP_INTERVAL = 2
 RESEND_INTERVAL = 2
 PORT = 11000
+MAX_RETRY = 5 #maximo numero de tentativas de reenvio
 message_counter = 0
 
 class UdpNode:
@@ -61,13 +62,18 @@ class UdpNode:
 
     def resend_pending_messages(self):
         now = time.time()
-        for pm in list(self.pending_messages.values()):
+        for pm_id, pm in list(self.pending_messages.items()):
             if pm.acknowledged:
                 continue
             if now - pm.last_sent > 3:
-                print(f"[RETX] Reenviando ID={pm.id}")
+                if pm.retries >= MAX_RETRY:  #depois de 5 tentativas, joga o erro e desiste
+                    print(f"[ERRO] Falha ao enviar mensagem ID={pm.id} após múltiplas tentativas")
+                    del self.pending_messages[pm_id]
+                    continue
+                print(f"[RETX] Reenviando ID={pm.id} (tentativa {pm.retries + 1})")
                 self.send_udp(pm.message, pm.dest_ip, pm.dest_port)
                 pm.update_last_sent()
+                pm.retries += 1
 
     def console_loop(self):
         while True:
@@ -78,20 +84,27 @@ class UdpNode:
             cmd = parts[0].lower()
             if cmd == "devices":
                 self.list_devices()
-            elif cmd == "talk" and len(parts) > 1:
-                try:
-                    target, msg = parts[1].split(" ", 1)
-                    self.send_talk(target, msg)
-                except ValueError:
+            elif cmd == "talk":
+                if len(parts) > 1:
+                    try:
+                        target, msg = parts[1].split(" ", 1)
+                        self.send_talk(target, msg)
+                    except ValueError:
+                        print("Uso: talk <nome> <mensagem>")
+                else:
                     print("Uso: talk <nome> <mensagem>")
-            elif cmd == "sendfile" and len(parts) > 1:
-                try:
-                    target, path = parts[1].split(" ", 1)
-                    self.send_file(target, path)
-                except ValueError:
+            elif cmd == "sendfile":
+                if len(parts) > 1:
+                    try:
+                        target, path = parts[1].split(" ", 1)
+                        self.send_file(target, path)
+                    except ValueError:
+                        print("Uso: sendfile <nome> <caminho-arquivo>")
+                else:
                     print("Uso: sendfile <nome> <caminho-arquivo>")
             else:
                 print("Comando não reconhecido:", cmd)
+                print("Comandos disponíveis: devices, talk, sendfile")
 
     def list_devices(self):
         print("=== Dispositivos Ativos ===")
